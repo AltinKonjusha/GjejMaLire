@@ -1,6 +1,7 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from scrapers.gjirafa50 import scrape_gjirafa50
+from scrapers.foleja import scrape_foleja
 from products.models import SearchLog
 
 @api_view(['GET'])
@@ -13,7 +14,6 @@ def search_products(request):
     if len(query) < 2:
         return Response({'error': 'Query too short'}, status=400)
 
-    # Run scrapers
     results = []
     errors = []
 
@@ -22,6 +22,12 @@ def search_products(request):
         results.extend(gjirafa_results)
     except Exception as e:
         errors.append(f"Gjirafa50 failed: {str(e)}")
+
+    try:
+        foleja_results = scrape_foleja(query)
+        results.extend(foleja_results)
+    except Exception as e:
+        errors.append(f"Foleja failed: {str(e)}")
 
     # Sort by price
     results.sort(key=lambda x: x['price'] or 999999)
