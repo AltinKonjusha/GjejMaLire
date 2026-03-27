@@ -10,8 +10,8 @@ def scrape_gjirafa50(query: str) -> list:
         
         try:
             url = f"https://gjirafa50.com/search?q={query.replace(' ', '+')}"
-            page.goto(url, timeout=15000)
-            page.wait_for_selector('.product-item', timeout=8000)
+            page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            page.wait_for_selector('.product-item', timeout=10000)
             
             items = page.query_selector_all('.product-item')
             

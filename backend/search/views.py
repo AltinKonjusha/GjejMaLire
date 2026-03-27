@@ -4,6 +4,7 @@ from scrapers.gjirafa50 import scrape_gjirafa50
 from scrapers.foleja import scrape_foleja
 from scrapers.neptun import scrape_neptun
 from products.models import SearchLog
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 @api_view(['GET'])
 def search_products(request):
@@ -18,23 +19,26 @@ def search_products(request):
     results = []
     errors = []
 
-    try:
-        gjirafa_results = scrape_gjirafa50(query)
-        results.extend(gjirafa_results)
-    except Exception as e:
-        errors.append(f"Gjirafa50 failed: {str(e)}")
+    scrapers = {
+        'gjirafa50': scrape_gjirafa50,
+        'foleja': scrape_foleja,
+        'neptun': scrape_neptun,
+    }
 
-    try:
-        foleja_results = scrape_foleja(query)
-        results.extend(foleja_results)
-    except Exception as e:
-        errors.append(f"Foleja failed: {str(e)}")
+    # Run all scrapers at the same time
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(fn, query): name
+            for name, fn in scrapers.items()
+        }
 
-    try:
-        neptun_results = scrape_neptun(query)
-        results.extend(neptun_results)
-    except Exception as e:
-        errors.append(f"Neptun failed: {str(e)}")
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                data = future.result(timeout=20)
+                results.extend(data)
+            except Exception as e:
+                errors.append(f"{name} failed: {str(e)}")
 
     results.sort(key=lambda x: x['price'] or 999999)
 
