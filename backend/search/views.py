@@ -1,3 +1,40 @@
-from django.shortcuts import render
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from scrapers.gjirafa50 import scrape_gjirafa50
+from products.models import SearchLog
 
-# Create your views here.
+@api_view(['GET'])
+def search_products(request):
+    query = request.GET.get('q', '').strip()
+    
+    if not query:
+        return Response({'error': 'Please provide a search query'}, status=400)
+    
+    if len(query) < 2:
+        return Response({'error': 'Query too short'}, status=400)
+
+    # Run scrapers
+    results = []
+    errors = []
+
+    try:
+        gjirafa_results = scrape_gjirafa50(query)
+        results.extend(gjirafa_results)
+    except Exception as e:
+        errors.append(f"Gjirafa50 failed: {str(e)}")
+
+    # Sort by price
+    results.sort(key=lambda x: x['price'] or 999999)
+
+    # Save search to log
+    SearchLog.objects.create(
+        query=query,
+        results_count=len(results)
+    )
+
+    return Response({
+        'query': query,
+        'count': len(results),
+        'results': results,
+        'errors': errors,
+    })
