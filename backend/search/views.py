@@ -5,6 +5,7 @@ from scrapers.foleja import scrape_foleja
 from scrapers.neptun import scrape_neptun
 from products.models import SearchLog
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from django.core.cache import cache
 
 @api_view(['GET'])
 def search_products(request):
@@ -16,6 +17,12 @@ def search_products(request):
     if len(query) < 2:
         return Response({'error': 'Query too short'}, status=400)
 
+    # Check cache first
+    cache_key = f"search_{query.lower().replace(' ', '_')}"
+    cached = cache.get(cache_key)
+    if cached:
+        return Response(cached)
+
     results = []
     errors = []
 
@@ -25,7 +32,6 @@ def search_products(request):
         'neptun': scrape_neptun,
     }
 
-    # Run all scrapers at the same time
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
             executor.submit(fn, query): name
@@ -47,9 +53,15 @@ def search_products(request):
         results_count=len(results)
     )
 
-    return Response({
+    response_data = {
         'query': query,
         'count': len(results),
         'results': results,
         'errors': errors,
-    })
+        'cached': False,
+    }
+
+    # Cache for 15 minutes
+    cache.set(cache_key, {**response_data, 'cached': True}, 60 * 15)
+
+    return Response(response_data)
